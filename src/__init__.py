@@ -6,6 +6,7 @@ from .strategies import (
     RSIStrategy,
     MACDStrategy,
     BBandsStrategy,
+    KDStrategy,
     STRATEGY_MAP,
 )
 
@@ -17,5 +18,6 @@ __all__ = [
     'RSIStrategy',
     'MACDStrategy',
     'BBandsStrategy',
+    'KDStrategy',
     'STRATEGY_MAP',
 ]
