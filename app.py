@@ -11,6 +11,7 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 from src import STRATEGY_MAP, load_price_data, run_backtest_engine
+from src.indicators import add_volume_ratio  # 👈 引入獨立的量比與指標計算模組
 
 
 # --- 股票名稱抓取輔助函式 ---
@@ -106,6 +107,23 @@ risk_kwargs = {
 
 strategy_kwargs = {}
 
+# 📊 【全域共用】量比濾網閥值設定拉桿（放在所有策略選項的外側）
+st.sidebar.markdown("---")
+st.sidebar.markdown("##### 📊 量比濾網閥值設定")
+buy_volume_ratio_threshold = st.sidebar.slider(
+    "買進最低量比門檻 (x)", min_value=0.0, max_value=3.0, value=1.0, step=0.1,
+    help="當進場訊號出現時，當日成交量必須達到 20 日均量的幾倍才允許買進 (0表示不限制)"
+)
+sell_volume_ratio_threshold = st.sidebar.slider(
+    "賣出最低量比門檻 (x)", min_value=0.0, max_value=3.0, value=0.0, step=0.1,
+    help="當出場訊號出現時的量比門檻 (0表示不限制)"
+)
+
+strategy_kwargs.update({
+    "buy_volume_ratio_threshold": buy_volume_ratio_threshold,
+    "sell_volume_ratio_threshold": sell_volume_ratio_threshold,
+})
+
 if strategy_name == "SMACross":
   fast_period = st.sidebar.number_input("快均線週期", value=10, min_value=2)
   slow_period = st.sidebar.number_input("慢均線週期", value=50, min_value=5)
@@ -158,6 +176,30 @@ elif strategy_name == "KD":
       "k_overbought": k_overbought,
   })
 
+elif strategy_name == "CandlestickPattern":
+  st.sidebar.markdown("---")
+  st.sidebar.markdown("#### 📈 K線型態策略參數設定")
+  
+  bullish_options = ["啟明之星", "紅三兵", "旭日東升", "曙光初現", "好友反攻"]
+  bearish_options = ["黃昏之星", "烏雲蓋頂", "黑三兵", "三只烏鴉"]
+  
+  selected_bullish = st.sidebar.multiselect(
+      "多方買進型態清單",
+      options=bullish_options,
+      default=["啟明之星", "紅三兵", "旭日東升"]
+  )
+  
+  selected_bearish = st.sidebar.multiselect(
+      "空方賣出型態清單",
+      options=bearish_options,
+      default=["黃昏之星", "烏雲蓋頂", "黑三兵"]
+  )
+  
+  strategy_kwargs.update({
+      "bullish_target": selected_bullish,
+      "bearish_target": selected_bearish,
+  })
+
 strategy_kwargs.update(risk_kwargs)
 
 run_button = st.sidebar.button("🚀 開始執行回測", type="primary")
@@ -175,10 +217,8 @@ if run_button:
           " 在選定區間的歷史價格資料，請檢查代碼或日期區間。"
       )
     else:
-      # 💡 計算成交金額與量比
-      df["Trading_Value"] = df["Volume"] * df["Close"]
-      df["Vol_SMA20"] = df["Volume"].rolling(window=20).mean()
-      df["Volume_Ratio"] = df["Volume"] / df["Vol_SMA20"]
+      # 💡 透過獨立的量比模組計算成交金額與量比
+      df = add_volume_ratio(df, sma_period=20)
 
       strategy_cls = STRATEGY_MAP[strategy_name]
       results = run_backtest_engine(

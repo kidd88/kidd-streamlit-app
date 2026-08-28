@@ -1,18 +1,21 @@
 import backtrader as bt
+import pandas as pd
 from ..risk_management import DynamicStopLossManager
 
 
 class BaseStrategy(bt.Strategy):
     """
     策略通用基類 (Base Strategy)
-    提供全系統統一的風控參數宣告、DynamicStopLossManager 綁定與日誌功能
+    提供全系統統一的風控參數宣告、DynamicStopLossManager 綁定、量比濾網與日誌功能
     """
     params = (
-        ('stop_type', 'none'),     # 風控模式: 'none', 'hard', 'trailing', 'atr'
-        ('stop_loss', 0.07),       # 硬停損比例 (如 0.07 代表 7%)
-        ('atr_period', 14),        # ATR 計算週期
-        ('atr_multiplier', 2.5),   # ATR 倍數
-        ('trailing_pct', 0.05),    # 移動停損拉回比例 (預設 5%)
+        ('stop_type', 'none'),             # 風控模式: 'none', 'hard', 'trailing', 'atr'
+        ('stop_loss', 0.07),               # 硬停損比例 (如 0.07 代表 7%)
+        ('atr_period', 14),                # ATR 計算週期
+        ('atr_multiplier', 2.5),           # ATR 倍數
+        ('trailing_pct', 0.05),            # 移動停損拉回比例 (預設 5%)
+        ('buy_volume_ratio_threshold', 1.0),   # 👈 新增：買進最低量比門檻
+        ('sell_volume_ratio_threshold', 0.0),  # 👈 新增：賣出最低量比門檻
     )
 
     def __init__(self):
@@ -29,6 +32,30 @@ class BaseStrategy(bt.Strategy):
             atr_multiplier=self.p.atr_multiplier,
             trailing_pct=self.p.trailing_pct
         )
+
+    def check_volume_ratio_pass(self, is_buy=True) -> bool:
+        """
+        統一檢查當前成交量是否符合設定的量比門檻
+        - 檢查 self.data 內是否有 Volume_Ratio 欄位
+        """
+        try:
+            # 支援透過資料串流或內建屬性讀取量比
+            vr = getattr(self.data, 'Volume_Ratio', None)
+            if vr is None or len(vr) == 0:
+                return True  # 若無此欄位則預設通過
+            
+            current_vr = vr[0]
+            if pd.isna(current_vr):
+                return True
+
+            if is_buy:
+                threshold = self.p.buy_volume_ratio_threshold
+                return current_vr >= threshold if threshold > 0 else True
+            else:
+                threshold = self.p.sell_volume_ratio_threshold
+                return current_vr >= threshold if threshold > 0 else True
+        except Exception:
+            return True
 
     def log(self, txt, dt=None):
         """通用 Log 輸出函數"""
