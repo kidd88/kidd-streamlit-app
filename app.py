@@ -12,6 +12,7 @@ import pandas as pd
 import yfinance as yf
 from src import STRATEGY_MAP, load_price_data, run_backtest_engine
 from src.indicators import add_volume_ratio  # 👈 引入獨立的量比與指標計算模組
+from src.utils.candlestick_patterns import identify_pattern_combination
 
 
 # --- 股票名稱抓取輔助函式 ---
@@ -37,7 +38,7 @@ st.title("📈 股票策略運行回測 Dashboard (事件驅動版)")
 st.sidebar.header("1. 基本回測參數")
 ticker = st.sidebar.text_input("股票代碼 (含字尾)", value="2330.TW")
 start_date = st.sidebar.date_input("開始日期", pd.to_datetime("2020-01-01"))
-end_date = st.sidebar.date_input("結束日期", pd.to_datetime("2026-08-22"))
+end_date = st.sidebar.date_input("結束日期", pd.Timestamp.today())
 init_cash = st.sidebar.number_input("初始資金 (TWD)", value=1000000.0, step=100000.0)
 
 st.sidebar.header("2. 交易成本與風控管理")
@@ -124,14 +125,14 @@ strategy_kwargs.update({
     "sell_volume_ratio_threshold": sell_volume_ratio_threshold,
 })
 
-if strategy_name == "SMACross":
+if strategy_name == "SmaCross":
   fast_period = st.sidebar.number_input("快均線週期", value=10, min_value=2)
   slow_period = st.sidebar.number_input("慢均線週期", value=50, min_value=5)
   strategy_kwargs.update(
       {"fast_period": fast_period, "slow_period": slow_period}
   )
 
-elif strategy_name == "RSI":
+elif strategy_name == "Rsi":
   rsi_period = st.sidebar.number_input("RSI 週期", value=14, min_value=2)
   oversold = st.sidebar.number_input(
       "超賣門檻 (買入)", value=30, min_value=5, max_value=45
@@ -145,7 +146,7 @@ elif strategy_name == "RSI":
       "overbought": overbought,
   })
 
-elif strategy_name == "MACD":
+elif strategy_name == "Macd":
   fast_period = st.sidebar.number_input("快線 EMA 週期", value=12, min_value=2)
   slow_period = st.sidebar.number_input("慢線 EMA 週期", value=26, min_value=5)
   signal_period = st.sidebar.number_input("訊號線 週期", value=9, min_value=2)
@@ -155,12 +156,12 @@ elif strategy_name == "MACD":
       "signal_period": signal_period,
   })
 
-elif strategy_name == "BBands":
+elif strategy_name == "Bbands":
   period = st.sidebar.number_input("布林帶週期", value=20, min_value=5)
   devfactor = st.sidebar.number_input("標準差倍數", value=2.0, step=0.1)
   strategy_kwargs.update({"period": period, "devfactor": devfactor})
 
-elif strategy_name == "KD":
+elif strategy_name == "Kd":
   k_period = st.sidebar.number_input("K 週期 (RSV)", value=9, min_value=2)
   d_period = st.sidebar.number_input("D 週期 (平滑)", value=3, min_value=1)
   k_oversold = st.sidebar.number_input(
@@ -176,7 +177,7 @@ elif strategy_name == "KD":
       "k_overbought": k_overbought,
   })
 
-elif strategy_name == "CandlestickPattern":
+elif strategy_name == "Candlestick":
   st.sidebar.markdown("---")
   st.sidebar.markdown("#### 📈 K線型態策略參數設定")
   
@@ -310,6 +311,18 @@ if run_button:
           f"{last_val:.1f} 億 TWD",
           f"量比 {last_vr:.2f}x ({vr_status_text})",
       )
+
+      # 🔍 【新增】當選擇 Candlestick 策略時，在下方額外提示即時 K 棒型態檢測明細
+      if strategy_name == "Candlestick":
+        detected_pattern = identify_pattern_combination(df)
+        last_date_str = pd.to_datetime(last_date).strftime('%Y-%m-%d')
+        
+        if detected_pattern in selected_bullish:
+          st.success(f"🟢 **【K線型態即時檢測通知】** 最新交易日 ({last_date_str}) 成功偵測到多方買進型態：**【{detected_pattern}】**！預計將於次一交易日開盤尋求建倉機會。")
+        elif detected_pattern in selected_bearish:
+          st.warning(f"🔴 **【K線型態即時檢測通知】** 最新交易日 ({last_date_str}) 成功偵測到空方賣出型態：**【{detected_pattern}】**！預計將於次一交易日開盤尋求平倉機會。")
+        else:
+          st.info(f"ℹ️ **【K線型態即時檢測通知】** 最新交易日 ({last_date_str}) 檢測結果：**無符合您勾選清單的指定型態**（當前型態：{detected_pattern}），故無預估觸發價。")
 
       st.divider()
 
@@ -458,17 +471,18 @@ if run_button:
 
       param_desc = f"策略: {strategy_name} | 參數: {strategy_kwargs}"
       perf_desc = (
-          f"總報酬率: {results.get('total_return', 0)*100:.2f}% |"
-          f" 年化報酬: {results.get('cagr', 0)*100:.2f}% | MDD:"
-          f" {results.get('mdd', 0)*100:.2f}% | 夏普: {results.get('sharpe', 0):.2f}"
+          f"總報酬率: {results.get('total_return', 0)*100:.2f}% | "
+          f"年化報酬: {results.get('cagr', 0)*100:.2f}% | "
+          f"MDD: {results.get('mdd', 0)*100:.2f}% | "
+          f"夏普: {results.get('sharpe', 0):.2f}"
       )
 
       fig.update_layout(
           title=dict(
               text=(
                   f"<b>{stock_display_name} 策略回測報告</b><br>"
-                  f"<sub style='color:gray;'>{param_desc} |"
-                  f" 風控模式: {risk_info}</sub><br>"
+                  f"<sub style='color:gray;'>{param_desc} | "
+                  f"風控模式: {risk_info}</sub><br>"
                   f"<sub style='color:darkgreen;'>{perf_desc}</sub>"
               ),
               font=dict(size=14),

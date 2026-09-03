@@ -1,29 +1,31 @@
-from .base_strategy import BaseStrategy
-from .sma_cross import SMACrossStrategy
-from .rsi_strategy import RSIStrategy
-from .macd_strategy import MACDStrategy
-from .bbands_strategy import BBandsStrategy
-from .kd_strategy import KDStrategy
-from .candlestick_pattern_strategy import CandlestickPatternStrategy
+# src/strategies/__init__.py
 
-# 1. 策略對照字典 (字串對應至策略類別)
+from .base import BaseStrategy
+from .sma_cross import SmaCrossStrategy
+from .rsi import RsiStrategy
+from .macd import MacdStrategy
+from .bbands import BbandsStrategy
+from .kd import KdStrategy
+from .candlestick import CandlestickPatternStrategy
+
+# 1. 統一規範的 STRATEGY_MAP (Key 採用簡潔大駝峰)
 STRATEGY_MAP = {
-    "SMACross": SMACrossStrategy,
-    "RSI": RSIStrategy,
-    "MACD": MACDStrategy,
-    "BBands": BBandsStrategy,
-    "KD": KDStrategy,
-    "CandlestickPattern": CandlestickPatternStrategy,
+    "SmaCross": SmaCrossStrategy,
+    "Rsi": RsiStrategy,
+    "Macd": MacdStrategy,
+    "Bbands": BbandsStrategy,
+    "Kd": KdStrategy,
+    "Candlestick": CandlestickPatternStrategy,
 }
 
-# 2. 完整匯出清單 (確保外部使用 from src import * 或單獨 import 時皆可存取)
+# 2. 完整匯出清單
 __all__ = [
     "BaseStrategy",
-    "SMACrossStrategy",
-    "RSIStrategy",
-    "MACDStrategy",
-    "BBandsStrategy",
-    "KDStrategy",
+    "SmaCrossStrategy",
+    "RsiStrategy",
+    "MacdStrategy",
+    "BbandsStrategy",
+    "KdStrategy",
     "CandlestickPatternStrategy",
     "STRATEGY_MAP",
 ]
